@@ -11,6 +11,9 @@ venv/
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # 환경변수
 .env
@@ -30,6 +33,8 @@ Thumbs.db
 backend/configs/config_infer_*.txt
 backend/configs/labels_*.txt
 backend/models/*.engine
+backend/models/*.onnx
+backend/models/*.pt
 
 # 로그
 *.log

@@ -229,15 +229,35 @@ def sel_model(mid: int, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
+def _extract_class_names_from_pt(pt_path: str) -> str:
+    """.pt 파일의 model.names 메타데이터에서 클래스 이름을 추출해 콤마 문자열로 반환."""
+    try:
+        import torch
+        ckpt = torch.load(pt_path, map_location="cpu", weights_only=False)
+        m = ckpt.get("model") or ckpt.get("ema")
+        names = getattr(m, "names", None) if m is not None else None
+        if not names:
+            return ""
+        if isinstance(names, dict):
+            ordered = [names[k] for k in sorted(names.keys())]
+        else:
+            ordered = list(names)
+        return ",".join(str(n) for n in ordered)
+    except Exception as e:
+        logger.warning("pt 클래스 자동 추출 실패: %s", e)
+        return ""
+
+
 @router.post("/api/model/upload_pt", dependencies=[Depends(require_token)])
 async def upload_pt(
     file: UploadFile = File(...),
-    class_names: str = Form(...),
+    class_names: str = Form(""),
     imgsz: int = Form(640),
     db: Session = Depends(get_db),
 ):
     """YOLOv8 .pt 업로드 → ONNX 변환 → 모델 등록 (비동기 작업).
 
+    class_names가 비어있으면 .pt의 model.names 메타데이터에서 자동 추출.
     실제 .engine 파일은 nvinfer가 첫 추론 시 자동으로 빌드한다.
     """
     if not file.filename or not file.filename.endswith(".pt"):
@@ -260,6 +280,18 @@ async def upload_pt(
     pt_path = os.path.abspath(os.path.join(MODEL_DIR, safe_name))
     with open(pt_path, "wb+") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    # class_names 미제공 시 .pt 메타데이터에서 자동 추출
+    if not class_names.strip():
+        auto_names = _extract_class_names_from_pt(pt_path)
+        if not auto_names:
+            os.remove(pt_path)
+            raise HTTPException(
+                400,
+                ".pt 파일에서 클래스 이름을 추출할 수 없습니다. class_names를 직접 입력해주세요.",
+            )
+        class_names = auto_names
+        logger.info("class_names 자동 추출: %s", class_names)
 
     job = job_manager.create("pt_to_engine", safe_name)
 

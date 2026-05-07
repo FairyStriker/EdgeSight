@@ -13,7 +13,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import declarative_base, joinedload, relationship, sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +63,22 @@ def init_db():
 
 
 def ensure_default_config():
-    """SystemConfig 행이 없으면 기본값으로 한 줄 생성."""
+    """SystemConfig 행이 없으면 기본값으로 한 줄 생성.
+    session 종료 후 active_model 관계 접근을 위해 joinedload 사용."""
     db = SessionLocal()
     try:
-        cfg = db.query(SystemConfig).first()
+        cfg = (
+            db.query(SystemConfig)
+            .options(joinedload(SystemConfig.active_model))
+            .first()
+        )
         if cfg is None:
             cfg = SystemConfig()
             db.add(cfg)
             db.commit()
             db.refresh(cfg)
+        # session 종료 전에 expunge하여 detached 상태에서도 이미 로드된 속성 접근 가능
+        db.expunge(cfg)
         return cfg
     finally:
         db.close()

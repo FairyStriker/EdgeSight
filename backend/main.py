@@ -123,6 +123,8 @@ def _install_signal_handlers():
 
 if __name__ == "__main__":
     _install_signal_handlers()
+    # FIX: lifespan 진입 전에 port를 읽어야 하므로 DB 초기화를 먼저 수행
+    init_db()
     db = SessionLocal()
     try:
         cfg = db.query(SystemConfig).first()

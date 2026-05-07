@@ -3,138 +3,157 @@
 NVIDIA Jetson Orin Nano용 엣지 AI 영상 관제 시스템.
 DeepStream(GStreamer) 기반 실시간 객체 탐지/트래킹과 React 기반 관리자 UI를 제공한다.
 
-## 구조
+YOLOv8 `.pt` 파일을 업로드하면 백엔드가 알아서 DeepStream 호환 ONNX → TensorRT 엔진까지
+자동 빌드하고 nvinfer 설정/라벨 파일을 생성해 즉시 사용할 수 있다.
 
+> **검증 환경**: Jetson Orin Nano · JetPack 6 (R36.4.7) · DeepStream 7.1 · Python 3.10
+
+---
+
+## 빠른 시작 (Jetson)
+
+### 0. 사전 준비
+
+| 항목 | 확인 명령 | 비고 |
+|---|---|---|
+| JetPack | `cat /etc/nv_tegra_release` | R36.x 권장 |
+| DeepStream | `cat /opt/nvidia/deepstream/deepstream/version` | 7.1 검증됨 |
+| pyds / gi | `python3 -c "import pyds, gi"` | DeepStream SDK 설치본 사용 |
+| trtexec | `ls /usr/src/tensorrt/bin/trtexec` | JetPack에 포함 |
+
+### 1. 코드 받기
+
+```bash
+cd ~
+git clone https://github.com/FairyStriker/EdgeSight.git
+cd EdgeSight
 ```
-EdgeSight/
-├── backend/             # FastAPI + DeepStream + SQLite
-│   ├── main.py
-│   ├── core/            # database, shared state, GStreamer engine, utils
-│   ├── web/             # REST + WebSocket + auth
-│   ├── configs/         # nvinfer config / 라벨 (런타임 생성)
-│   ├── models/          # 업로드된 .engine 파일
-│   └── requirements.txt
-├── frontend/            # React + Vite + TypeScript
-│   ├── src/
-│   │   ├── components/  # Header, VideoStream, StatusPanel, *Modal
-│   │   ├── hooks/       # useStatus(WS), useConfig, useModels
-│   │   ├── api/         # client + types
-│   │   ├── i18n/        # ko/en 사전
-│   │   └── styles/      # global.css
-│   └── package.json
-└── REFERENCE_ANALYSIS.md  # 원본 demo 분석 리포트
-```
 
-## 백엔드 (Jetson)
+### 2. 백엔드 의존성 설치
 
-### 설치
+`pyds`, `gi(PyGObject)`가 시스템 패키지로 설치되어 있어야 하므로,
+이미 그 패키지들에 접근 가능한 환경(시스템 Python, 또는 `--system-site-packages`로 만든 venv)에서 설치한다.
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
-# pyds, PyGObject는 DeepStream SDK / apt 설치본 사용
+
+# .pt 자동 변환 기능을 쓰려면 추가
+pip install ultralytics onnx onnxsim
 ```
 
-### 실행
+### 3. Node.js 설치 + 프론트엔드 빌드
 
 ```bash
-# 개발 모드
-EDGESIGHT_LOG_LEVEL=DEBUG uvicorn main:app --reload
+# Node.js 20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-# 프로덕션 (인증 활성화)
-export EDGESIGHT_TOKEN="your-secret-token"
+# 프론트엔드 빌드
+cd ~/EdgeSight/frontend
+npm install
+npm run build      # → frontend/dist/ 생성
+```
+
+### 4. 백엔드 실행
+
+```bash
+cd ~/EdgeSight/backend
 python main.py
 ```
 
-| 환경변수 | 설명 |
-|---|---|
-| `EDGESIGHT_TOKEN` | 쓰기 엔드포인트 보호용 Bearer 토큰. 미설정 시 인증 비활성(개발 모드) |
-| `EDGESIGHT_PORT` | 서버 포트 (미설정 시 DB의 `server_port`) |
-| `EDGESIGHT_LOG_LEVEL` | 로그 레벨 (기본 `INFO`) |
-| `EDGESIGHT_DB_URL` | SQLAlchemy URL (기본 `sqlite:///./edge_system.db`) |
-| `EDGESIGHT_CORS_ORIGINS` | 콤마 구분 origin 목록 (Vite dev server용) |
+`Uvicorn running on http://0.0.0.0:8000` 로그가 뜨면 정상.
 
-## 프론트엔드
-
-### 개발 서버 (Hot Reload)
+### 5. 접속
 
 ```bash
-cd frontend
-npm install
-npm run dev   # http://localhost:5173
+hostname -I    # Jetson IP 확인
 ```
 
-Vite가 `/api`, `/ws`, `/video_feed` 를 백엔드(`http://localhost:8000`)로 프록시한다.
+PC 브라우저에서 `http://<jetson-ip>:8000` 접속.
 
-### 프로덕션 빌드
+### 6. 첫 사용
+
+1. **⚙️ 시스템 설정** → **RTSP 주소** 입력 후 저장
+   (기본값 `0`은 USB 카메라용. RTSP면 `rtsp://...` 형식으로 변경)
+2. **📦 모델 관리** 모달에서 모델 업로드:
+   - **`.engine 직접 업로드`** 탭 — 이미 빌드된 TensorRT 엔진
+   - **`.pt 자동 변환`** 탭 — YOLOv8 .pt 업로드 (수 분 소요, 진행률 표시)
+3. 업로드된 모델의 **선택** 버튼 → 영상 + 객체 테이블 표시 시작
+
+---
+
+## 인증 (선택)
+
+쓰기 엔드포인트(설정 변경, 모델 업로드/삭제)를 보호하려면 환경변수로 토큰을 설정한다.
 
 ```bash
-cd frontend
-npm run build   # → frontend/dist/
+export EDGESIGHT_TOKEN="아무거나-긴-랜덤-문자열"
+python main.py
 ```
 
-이후 `backend/main.py`가 `frontend/dist`를 자동으로 마운트하여 단일 서버에서 서빙한다.
+UI의 시스템 설정에서 동일 토큰을 입력하면 이후 요청 헤더에 자동 첨부된다.
+환경변수가 비어있으면 인증은 비활성(개발 모드)이다.
 
-## API
+추가 환경변수는 [`backend/.env.example`](backend/.env.example) 참고.
+
+---
+
+## 폴더 구조
+
+```
+EdgeSight/
+├── backend/                       # FastAPI + DeepStream + SQLite
+│   ├── main.py                    # 엔트리 포인트 (lifespan + SPA 서빙)
+│   ├── core/
+│   │   ├── database.py            # AIModel, SystemConfig
+│   │   ├── shared.py              # frame/meta 공유 상태 (frame_seq)
+│   │   ├── engine.py              # DeepStream 파이프라인 + AIEngine 스레드
+│   │   ├── utils.py               # nvinfer config/label 생성·삭제
+│   │   ├── converter.py           # .pt → DS 호환 ONNX → TensorRT engine
+│   │   └── jobs.py                # 비동기 작업 추적 (in-memory)
+│   ├── web/
+│   │   ├── routes.py              # REST + WebSocket
+│   │   └── auth.py                # Bearer 토큰 인증
+│   ├── configs/                   # nvinfer 설정/라벨 (런타임 생성)
+│   ├── models/                    # 업로드된 .pt/.onnx/.engine
+│   ├── libnvdsinfer_custom_impl_Yolo.so   # DeepStream-Yolo 커스텀 후처리
+│   └── requirements.txt
+├── frontend/                      # React + Vite + TypeScript
+│   ├── src/
+│   │   ├── components/            # Header, VideoStream, StatusPanel, Modal 등
+│   │   ├── hooks/                 # useStatus(WS), useConfig, useModels, useJobs
+│   │   ├── api/                   # client + types
+│   │   ├── i18n/                  # ko / en 사전
+│   │   └── styles/                # global.css
+│   └── package.json
+├── REFERENCE_ANALYSIS.md          # 원본 demo 분석 리포트
+└── README.md
+```
+
+---
+
+## 주요 API
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| GET | `/api/healthz` | - | 헬스체크 |
-| GET | `/api/status` | - | 최신 메타(폴링용) |
-| WS  | `/ws/status` | - | 메타 푸시 (~20Hz, 변화 시점만) |
-| GET | `/video_feed` | - | MJPEG 스트림 |
-| GET | `/api/config` | - | 현재 시스템 설정 |
+| GET  | `/api/healthz` | – | 헬스체크 |
+| GET  | `/api/status`  | – | 최신 메타(폴링용) |
+| WS   | `/ws/status`   | – | 메타 푸시 (~20Hz, 변화 시점만) |
+| GET  | `/video_feed`  | – | MJPEG 스트림 |
+| GET  | `/api/config`  | – | 현재 시스템 설정 |
 | POST | `/api/config/update` | ✓ | 설정 갱신 |
-| GET | `/api/model/list` | - | 모델 목록 |
-| POST | `/api/model/upload` | ✓ | 모델 업로드 (.engine 직접) |
-| POST | `/api/model/upload_pt` | ✓ | YOLOv8 .pt 업로드 → ONNX 자동 변환 (비동기 Job 반환) |
+| GET  | `/api/model/list` | – | 모델 목록 |
+| POST | `/api/model/upload`    | ✓ | `.engine` 직접 업로드 |
+| POST | `/api/model/upload_pt` | ✓ | `.pt` 업로드 → ONNX → engine 자동 빌드 |
 | POST | `/api/model/select/{id}` | ✓ | 활성 모델 변경 |
-| DELETE | `/api/model/{id}` | ✓ | 모델 삭제 |
-| GET | `/api/jobs` | - | 변환 작업 목록 |
-| GET | `/api/jobs/{id}` | - | 단일 작업 상태 |
+| DELETE | `/api/model/{id}`      | ✓ | 모델 삭제 |
+| GET  | `/api/jobs`         | – | 변환 작업 목록 |
+| GET  | `/api/jobs/{id}`    | – | 단일 작업 상태 |
 
-## 원본 demo 대비 변경/수정 사항
+---
 
-원본(`D:/works/demo`) 대비 다음을 적용:
-
-### Critical 수정
-- **C1** [engine.py] RTSP 비교를 정수 → 문자열로 통일 (DB 저장 형식과 일치)
-- **C2** [routes.py] `SystemConfig` None 가드 (NPE 방지)
-- **C3** [database.py] `language` 컬럼 자동 마이그레이션(`ALTER TABLE IF NOT EXISTS`)
-- **C4** [routes.py] 업로드 파일명 `os.path.basename` 적용 (path traversal 방지)
-- **C5** [auth.py] Bearer 토큰 인증 (쓰기 엔드포인트 한정)
-
-### Major 개선
-- **M1** [engine.py] 트래커 설정 절대경로 (`/opt/nvidia/deepstream/...`)
-- **M2** [engine.py] 파이프라인 재시작 락(`_restart_lock`)으로 동기화
-- **M3** [main.py] FastAPI lifespan + 시그널 핸들러로 graceful shutdown
-- **M4** [shared.py] `frame_seq`/`meta_seq` 도입 — byte 비교 제거
-- **M5** [routes.py] `language` 변경 시 `state`에도 반영
-- **M6** [routes.py] 업로드 부분 실패 시 파일/config 정리
-- **M7** [VideoStream.tsx] 스트림 끊김 시 자동 재연결 (1.5초 백오프)
-- **M8** [routes.py + useStatus.ts] WebSocket 푸시로 100ms 폴링 대체
-
-### 기타
-- 로깅 표준화 (`print` → `logging`)
-- Jetson 외 환경에서도 import 가능하도록 `gi/pyds` 가드
-- 정적 파일 SPA fallback (React Router 도입 시 대비)
-
-### 신규 기능
-- **YOLOv8 .pt 자동 변환** — `/api/model/upload_pt` + 백그라운드 Job
-  - .pt → DeepStream 호환 ONNX → TensorRT FP16 .engine → config + label까지 한 번에
-  - DeepStream-Yolo (MIT License) 의 출력 헤드 로직 자체 구현
-  - 외부 공식 스크립트 사용도 옵션 지원
-- **Job 추적 시스템** — `/api/jobs`, in-memory + thread-safe + 동시 변환 1개 제한
-- **모델 관리 UI 탭** — `.engine 직접` / `.pt 자동 변환` 분리, 단계별 진행률 표시
-
-## YOLOv8 .pt 자동 변환 사용법
-
-UI의 **모델 관리 → `.pt 자동 변환` 탭**에서 .pt 파일과 클래스 목록을 업로드하면
-백그라운드에서 다음 단계가 자동 수행되고, 진행률이 같은 모달의 **변환 작업** 패널에 표시된다.
-
-### 동작 흐름 (전 과정 백엔드에서 수행)
+## .pt 자동 변환 동작 흐름
 
 ```
 사용자 .pt 업로드
@@ -146,49 +165,10 @@ trtexec FP16 빌드
 nvinfer config + 라벨 파일 생성
    ↓ backend/configs/config_infer_{name}.txt
    ↓ backend/configs/labels_{name}.txt
-DB(AIModel)에 등록 → 모델 목록 갱신
+DB(AIModel) 등록 → UI 모델 목록 갱신
 ```
 
-`.engine` 파일이 업로드 시점에 직접 빌드되므로, 모델 활성화 시 즉시 추론이 시작된다
-(nvinfer가 별도로 engine 빌드를 하지 않음).
-
-### 의존성 설치 (Jetson)
-
-```bash
-# 1) Jetson에 NVIDIA 제공 PyTorch wheel 설치
-#    https://forums.developer.nvidia.com/t/pytorch-for-jetson/
-
-# 2) 변환 의존성
-pip install ultralytics onnx onnxsim
-```
-
-`trtexec`은 JetPack 표준 설치본을 사용한다(`/usr/src/tensorrt/bin/trtexec`).
-경로가 다르면 `EDGESIGHT_TRTEXEC` 환경변수로 override.
-
-### ONNX 출력 형식
-
-자체 구현된 export는 marcoslucianops/DeepStream-Yolo (MIT License) 의
-`utils/export_yoloV8.py` 와 동일한 출력 텐서 형식을 따른다:
-
-| 텐서 | 형상 | 내용 |
-|---|---|---|
-| `boxes` | `[1, num_anchors, 4]` | cx, cy, w, h |
-| `scores` | `[1, num_anchors, num_classes]` | per-class confidence |
-
-이 두 출력은 `libnvdsinfer_custom_impl_Yolo.so`의 `NvDsInferParseYolo` 후처리에서 NMS 처리된다.
-
-### 외부 스크립트 사용 (옵션)
-
-자체 export가 호환되지 않는 모델 변형(예: yolov8-pose, custom head)에는
-공식 [DeepStream-Yolo](https://github.com/marcoslucianops/DeepStream-Yolo) 스크립트를 사용:
-
-```bash
-export EDGESIGHT_PT_EXPORT_SCRIPT=/opt/DeepStream-Yolo/utils/export_yoloV8.py
-```
-
-설정 시 자체 export 대신 해당 스크립트가 호출된다 (`-w <pt> --opset 12 --size 640`).
-
-### 변환 시간 가이드
+업로드 시 클래스 라벨은 `.pt` 파일의 메타데이터(`model.names`)에서 자동 추출된다.
 
 | 모델 | ONNX export | trtexec FP16 (Orin Nano) |
 |---|---|---|
@@ -197,8 +177,37 @@ export EDGESIGHT_PT_EXPORT_SCRIPT=/opt/DeepStream-Yolo/utils/export_yoloV8.py
 | YOLOv8m | ~25초 | ~3~5분 |
 | YOLOv8l | ~40초 | ~5~10분 |
 
-## 다음 작업 후보
+---
 
-- 이벤트 이력 DB 저장 / ROI 카운팅 / 다중 카메라
-- systemd unit, Docker 이미지
-- Prometheus 메트릭 + Grafana
+## 트러블슈팅
+
+| 증상 | 대처 |
+|---|---|
+| `couldn't find element 'nvinfer'` | DeepStream 환경 미활성. `source /opt/nvidia/deepstream/deepstream/scripts/setup.sh` 후 재실행 |
+| 영상이 검은 화면 | RTSP URL 확인. 인증 필요 시 `rtsp://user:pass@host/path` |
+| 첫 실행 시 파이프라인 에러 반복 | RTSP 미설정 상태(기본값 `0`). UI 시스템 설정에서 주소 입력하면 멈춤 |
+| `pip install ultralytics` 충돌 | Jetson용 PyTorch wheel 먼저 설치 필요 (NVIDIA 공식 가이드 참조) |
+| trtexec 못 찾음 | `EDGESIGHT_TRTEXEC` 환경변수로 경로 지정 |
+
+---
+
+## 개발 모드 (Hot Reload)
+
+프론트엔드를 수정하며 작업할 때:
+
+```bash
+# 터미널 1 — 백엔드
+cd backend && python main.py
+
+# 터미널 2 — Vite dev 서버 (5173 포트, /api·/ws·/video_feed 자동 프록시)
+cd frontend && npm run dev
+```
+
+브라우저에서 `http://localhost:5173` 접속.
+
+---
+
+## 라이선스 / 출처
+
+- ONNX export 출력 헤드 로직: marcoslucianops/[DeepStream-Yolo](https://github.com/marcoslucianops/DeepStream-Yolo) (MIT License) 참고
+- 원본 데모 분석은 [`REFERENCE_ANALYSIS.md`](REFERENCE_ANALYSIS.md) 참조

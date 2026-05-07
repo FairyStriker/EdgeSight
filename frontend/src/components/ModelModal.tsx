@@ -193,22 +193,21 @@ function EngineUploadForm({
 
 function PtUploadForm({ lang }: { lang: Lang }) {
   const [file, setFile] = useState<File | null>(null);
-  const [classNames, setClassNames] = useState("");
   const [imgsz, setImgsz] = useState(640);
   const [busy, setBusy] = useState(false);
 
   const onUpload = async () => {
-    if (!file || !classNames.trim()) {
+    if (!file) {
       alert("Check input");
       return;
     }
     if (!confirm(t(lang, "confirm_upload"))) return;
     setBusy(true);
     try {
-      const r = await api.uploadPt(file, classNames.trim(), imgsz);
+      // .pt는 메타데이터에서 클래스 자동 추출
+      const r = await api.uploadPt(file, imgsz);
       alert(t(lang, "pt_started").replace("{id}", r.job_id));
       setFile(null);
-      setClassNames("");
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -227,14 +226,6 @@ function PtUploadForm({ lang }: { lang: Lang }) {
         className="form-input"
         style={{ marginBottom: 10 }}
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-      />
-      <input
-        type="text"
-        placeholder={t(lang, "placeholder_classes")}
-        className="form-input"
-        style={{ marginBottom: 10 }}
-        value={classNames}
-        onChange={(e) => setClassNames(e.target.value)}
       />
       <span className="form-label">{t(lang, "pt_imgsz")}</span>
       <input

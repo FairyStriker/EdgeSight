@@ -200,6 +200,14 @@ class DeepStreamPipeline:
     def run_loop(self):
         while state.is_running:
             try:
+                # FIX: 활성 모델이 없으면 파이프라인 생성을 건너뛴다.
+                # nvinfer set_property("config-file-path", None) 시 C++ string
+                # null 생성자에서 std::logic_error로 abort 되는 문제 방지.
+                config_path = state.config.get("config_path")
+                if not config_path:
+                    time.sleep(1)
+                    continue
+
                 logger.info("파이프라인 구동 시작")
                 self.pipeline = self._create_pipeline()
                 if not self.pipeline:

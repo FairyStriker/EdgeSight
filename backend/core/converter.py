@@ -92,12 +92,12 @@ def _run_custom_export(
 def _export_to_deepstream_onnx(pt_path: str, onnx_path: str, imgsz: int, opset: int) -> str:
     """YOLOv8 .pt → DeepStream-Yolo 호환 ONNX (자체 구현).
 
-    출력 텐서:
-      - boxes:  [1, num_anchors, 4]   (cx, cy, w, h)
-      - scores: [1, num_anchors, num_classes]
+    출력 텐서: 단일 (1, num_anchors, 6) 형식
+        [x1, y1, x2, y2, max_score, class_id]
+    좌표는 xyxy (xywh → xyxy 변환), 입력 해상도 픽셀 좌표.
 
-    참고: marcoslucianops/DeepStream-Yolo (MIT License) utils/export_yoloV8.py
-    의 출력 헤드 재구성 로직과 동일.
+    참고: nvdsinfer_custom_impl_Yolo/nvdsparsebbox_Yolo.cpp 의
+    NvDsInferParseYolo 파서가 단일 (N,6) 텐서를 기대함.
     """
     if not is_ultralytics_available():
         raise RuntimeError(
@@ -112,9 +112,23 @@ def _export_to_deepstream_onnx(pt_path: str, onnx_path: str, imgsz: int, opset: 
         def forward(self, x):
             # x: [batch, 4 + num_classes, num_anchors]
             x = x.transpose(1, 2)  # → [batch, num_anchors, 4 + num_classes]
-            boxes = x[:, :, :4]
+            boxes_xywh = x[:, :, :4]
             scores = x[:, :, 4:]
-            return boxes, scores
+
+            # xywh → xyxy
+            cx, cy, w, h = boxes_xywh.unbind(dim=-1)
+            x1 = cx - w / 2
+            y1 = cy - h / 2
+            x2 = cx + w / 2
+            y2 = cy + h / 2
+
+            # max score & class index
+            max_score, max_idx = scores.max(dim=-1, keepdim=False)
+
+            # concat → (B, N, 6): [x1, y1, x2, y2, score, class_id]
+            return torch.stack(
+                [x1, y1, x2, y2, max_score, max_idx.float()], dim=-1
+            )
 
     yolo = YOLO(pt_path)
     inner = deepcopy(yolo.model).float()
@@ -144,7 +158,7 @@ def _export_to_deepstream_onnx(pt_path: str, onnx_path: str, imgsz: int, opset: 
             opset_version=opset,
             do_constant_folding=True,
             input_names=["input"],
-            output_names=["boxes", "scores"],
+            output_names=["output"],
         )
 
     # 단순화 (선택)

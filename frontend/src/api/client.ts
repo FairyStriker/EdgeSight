@@ -66,12 +66,11 @@ export const api = {
 
   async uploadPt(
     file: File,
-    classNames: string,
     imgsz: number = 640
   ): Promise<{ job_id: string }> {
+    // .pt는 메타데이터에서 클래스 자동 추출하므로 class_names 미전송
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("class_names", classNames);
     fd.append("imgsz", String(imgsz));
     const res = await fetch("/api/model/upload_pt", {
       method: "POST",
