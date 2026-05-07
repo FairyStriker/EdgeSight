@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.db
+*.sqlite
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+
+# 환경변수
+.env
+.env.local
+
+# IDE / 도구
+.idea/
+.vscode/
+.claude/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 런타임 산출물
+backend/configs/config_infer_*.txt
+backend/configs/labels_*.txt
+backend/models/*.engine
+
+# 로그
+*.log
