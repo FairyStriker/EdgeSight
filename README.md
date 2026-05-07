@@ -127,7 +127,6 @@ EdgeSight/
 │   │   ├── i18n/                  # ko / en 사전
 │   │   └── styles/                # global.css
 │   └── package.json
-├── REFERENCE_ANALYSIS.md          # 원본 demo 분석 리포트
 └── README.md
 ```
 
