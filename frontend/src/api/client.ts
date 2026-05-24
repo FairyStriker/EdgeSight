@@ -1,4 +1,5 @@
 import type {
+  DemoVideoListResponse,
   Job,
   JobListResponse,
   ModelListResponse,
@@ -100,6 +101,30 @@ export const api = {
 
   async deleteModel(id: number): Promise<void> {
     const res = await fetch(`/api/model/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  },
+
+  async listVideos(): Promise<DemoVideoListResponse> {
+    const res = await fetch("/api/video/list");
+    return jsonOrThrow<DemoVideoListResponse>(res);
+  },
+
+  async uploadVideo(file: File): Promise<{ job_id: string }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/video/upload", {
+      method: "POST",
+      body: fd,
+      headers: authHeaders(),
+    });
+    return jsonOrThrow<{ job_id: string }>(res);
+  },
+
+  async deleteVideo(id: number): Promise<void> {
+    const res = await fetch(`/api/video/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });

@@ -43,10 +43,23 @@ class SystemConfig(Base):
     iou_threshold = Column(Float, default=0.45)
     active_model_id = Column(Integer, ForeignKey("ai_models.id"), nullable=True)
     active_model = relationship("AIModel")
+    # 입력 소스 종류: "rtsp" | "usb" | "video"
+    input_source = Column(String, default="rtsp")
+    # input_source == "video" 일 때 사용할 영상 파일명 (demo_videos.filename 참조)
+    # 업로드 시 ffmpeg으로 yuv420p / H.264 main 으로 정규화된 변환본 파일명
+    video_filename = Column(String, nullable=True)
+
+
+class DemoVideo(Base):
+    __tablename__ = "demo_videos"
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, unique=True, index=True)
+    filepath = Column(String)
+    uploaded_at = Column(DateTime, default=datetime.now)
 
 
 def _ensure_columns():
-    """기존 DB가 신규 컬럼(language)을 누락한 경우를 대비한 가벼운 마이그레이션."""
+    """기존 DB가 신규 컬럼을 누락한 경우를 대비한 가벼운 마이그레이션."""
     inspector = inspect(engine)
     if "system_config" not in inspector.get_table_names():
         return
@@ -55,6 +68,12 @@ def _ensure_columns():
         if "language" not in cols:
             logger.warning("system_config.language 컬럼이 없어 추가합니다.")
             conn.execute(text("ALTER TABLE system_config ADD COLUMN language VARCHAR DEFAULT 'ko'"))
+        if "input_source" not in cols:
+            logger.warning("system_config.input_source 컬럼이 없어 추가합니다.")
+            conn.execute(text("ALTER TABLE system_config ADD COLUMN input_source VARCHAR DEFAULT 'rtsp'"))
+        if "video_filename" not in cols:
+            logger.warning("system_config.video_filename 컬럼이 없어 추가합니다.")
+            conn.execute(text("ALTER TABLE system_config ADD COLUMN video_filename VARCHAR"))
 
 
 def init_db():

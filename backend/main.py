@@ -1,9 +1,23 @@
 import logging
 import os
+import shutil
 import signal
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# ── GStreamer plugin segfault 방지 (입력 소스 전환 시 v4l2 plugin 충돌) ──
+# 1) 매 서버 시작 시 GStreamer registry cache 삭제 → 깨끗한 상태로 시작
+_GST_CACHE = os.path.expanduser("~/.cache/gstreamer-1.0")
+if os.path.isdir(_GST_CACHE):
+    try:
+        shutil.rmtree(_GST_CACHE)
+    except Exception:
+        pass
+# 2) plugin scan을 자식 process 대신 main에서 직접 수행 (segfault 시 plugin
+#    disable 되는 동작 회피, 일관된 환경 보장)
+os.environ.setdefault("GST_REGISTRY_FORK", "no")
+# ────────────────────────────────────────────────────────────────────────
 
 import uvicorn
 from fastapi import FastAPI
@@ -15,6 +29,26 @@ from core.database import SessionLocal, SystemConfig, ensure_default_config, ini
 from core.engine import AIEngine
 from core.shared import state
 from web.routes import router
+
+
+def _preload_gst_plugins() -> None:
+    """v4l2 등 lazy-load plugin을 main process에 미리 로드.
+    이후 입력 소스 전환 시 plugin 재로딩 단계에서 segfault 발생을 회피."""
+    try:
+        import gi
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+        Gst.init(None)
+        for name in ("v4l2src", "uridecodebin", "nvvideoconvert"):
+            el = Gst.ElementFactory.make(name, None)
+            if el is None:
+                # 미지원 plugin은 무시
+                continue
+            # 명시적으로 reference 해제 (plugin 자체는 process 메모리에 남음)
+            del el
+    except Exception:
+        # pre-load 실패는 치명적이지 않음, 정상 흐름으로 진행
+        pass
 
 logging.basicConfig(
     level=os.environ.get("EDGESIGHT_LOG_LEVEL", "INFO"),
@@ -33,6 +67,8 @@ def load_settings() -> int:
     state.update_config("conf", cfg.conf_threshold)
     state.update_config("iou", cfg.iou_threshold)
     state.update_config("language", cfg.language)
+    state.update_config("input_source", cfg.input_source or "rtsp")
+    state.update_config("video_filename", cfg.video_filename)
     if cfg.active_model:
         state.update_config("config_path", cfg.active_model.config_filepath)
     return cfg.server_port
@@ -46,6 +82,9 @@ async def lifespan(_app: FastAPI):
     global engine_thread
     init_db()
     load_settings()
+
+    # AIEngine 생성 전에 GStreamer plugin pre-load (segfault 방지)
+    _preload_gst_plugins()
 
     if not os.environ.get("EDGESIGHT_TOKEN"):
         logger.warning(

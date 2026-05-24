@@ -12,6 +12,8 @@ class RuntimeState:
             "rtsp_url": "0",
             "config_path": None,
             "language": "ko",
+            "input_source": "rtsp",     # "rtsp" | "usb" | "video"
+            "video_filename": None,
         }
 
         self.latest_frame: bytes | None = None

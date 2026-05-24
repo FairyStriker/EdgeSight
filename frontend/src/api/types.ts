@@ -13,6 +13,8 @@ export interface StatusMeta {
   seq?: number;
 }
 
+export type InputSource = "rtsp" | "usb" | "video";
+
 export interface SystemConfigDTO {
   rtsp_url: string;
   conf_threshold: number;
@@ -20,6 +22,18 @@ export interface SystemConfigDTO {
   server_port: number;
   language: "ko" | "en";
   active_model_id: number | null;
+  input_source: InputSource;
+  video_filename: string | null;
+}
+
+export interface DemoVideoItem {
+  id: number;
+  filename: string;
+  uploaded_at: string;
+}
+
+export interface DemoVideoListResponse {
+  videos: DemoVideoItem[];
 }
 
 export interface ModelItem {

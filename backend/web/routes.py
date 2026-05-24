@@ -17,8 +17,10 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+import subprocess
+
 from core.converter import convert_pt_to_engine
-from core.database import AIModel, SessionLocal, SystemConfig
+from core.database import AIModel, DemoVideo, SessionLocal, SystemConfig
 from core.jobs import Job, job_manager
 from core.shared import state
 from core.utils import create_engine_config, delete_generated_files
@@ -29,6 +31,10 @@ router = APIRouter()
 
 MODEL_DIR = os.environ.get("EDGESIGHT_MODEL_DIR", "./models")
 CONFIG_DIR = os.environ.get("EDGESIGHT_CONFIG_DIR", "./configs")
+VIDEO_DIR = os.environ.get("EDGESIGHT_VIDEO_DIR", "./videos")
+
+# 허용 영상 확장자 (업로드 시점) — 변환 후엔 모두 .mp4
+VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v"}
 
 
 def get_db():
@@ -108,6 +114,8 @@ def get_config(db: Session = Depends(get_db)):
         "server_port": c.server_port,
         "language": c.language,
         "active_model_id": c.active_model_id,
+        "input_source": c.input_source or "rtsp",
+        "video_filename": c.video_filename,
     }
 
 
@@ -118,23 +126,178 @@ async def update_cfg(
     iou: float = Form(...),
     port: int = Form(...),
     language: str = Form(...),
+    input_source: str = Form("rtsp"),
+    video_filename: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    if input_source not in ("rtsp", "usb", "video"):
+        raise HTTPException(400, "input_source 값이 잘못되었습니다.")
+
     c = db.query(SystemConfig).first()
     if c is None:
         raise HTTPException(500, "기본 설정 행이 없습니다.")
+
+    video_filename = video_filename.strip() or None
+    if input_source == "video":
+        if not video_filename:
+            raise HTTPException(400, "video_filename 이 필요합니다.")
+        v = db.query(DemoVideo).filter(DemoVideo.filename == video_filename).first()
+        if v is None:
+            raise HTTPException(404, "선택한 영상이 존재하지 않습니다.")
+
     c.rtsp_url = rtsp
     c.conf_threshold = conf
     c.iou_threshold = iou
     c.server_port = port
     c.language = language
+    c.input_source = input_source
+    c.video_filename = video_filename
     db.commit()
 
     state.update_config("rtsp_url", rtsp)
     state.update_config("conf", conf)
     state.update_config("iou", iou)
-    # FIX(M5): language도 state에 반영
     state.update_config("language", language)
+    state.update_config("input_source", input_source)
+    state.update_config("video_filename", video_filename)
+    return {"status": "ok"}
+
+
+# ----- 데모 영상 -----
+
+def _ffmpeg_normalize(src_path: str, dst_path: str) -> None:
+    """업로드 영상을 yuv420p / H.264 main / 고정 GOP 로 정규화 변환.
+    yuvj420p 등 비표준 픽셀 포맷 / 비표준 GOP 가 DeepStream 디코더 / 추론과 충돌하는
+    이슈를 회피하기 위해 모든 업로드 영상을 표준 형태로 변환.
+    """
+    cmd = [
+        "ffmpeg", "-y", "-i", src_path,
+        "-c:v", "libx264",
+        "-profile:v", "main",
+        "-level", "4.1",
+        "-pix_fmt", "yuv420p",
+        "-g", "30", "-keyint_min", "30",
+        "-an",
+        dst_path,
+    ]
+    logger.info("ffmpeg 정규화 시작: %s -> %s", src_path, dst_path)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        tail = (result.stderr.strip() or result.stdout.strip())[-1200:]
+        raise RuntimeError(f"ffmpeg 변환 실패 (rc={result.returncode}): {tail}")
+    if not os.path.exists(dst_path):
+        raise RuntimeError(f"ffmpeg 변환 결과 없음: {dst_path}")
+
+
+@router.get("/api/video/list")
+def video_list(db: Session = Depends(get_db)):
+    vs = db.query(DemoVideo).order_by(DemoVideo.uploaded_at.desc()).all()
+    return {
+        "videos": [
+            {
+                "id": v.id,
+                "filename": v.filename,
+                "uploaded_at": v.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+            }
+            for v in vs
+        ]
+    }
+
+
+@router.post("/api/video/upload", dependencies=[Depends(require_token)])
+async def upload_video(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """영상 업로드 → ffmpeg 정규화 변환 (비동기 job).
+    변환 후엔 파일명이 항상 .mp4 (yuv420p / H.264 main)."""
+    if not file.filename:
+        raise HTTPException(400, "파일이 비어있습니다.")
+    safe_name = os.path.basename(file.filename)
+    if safe_name != file.filename or "/" in safe_name or "\\" in safe_name:
+        raise HTTPException(400, "허용되지 않는 파일명입니다.")
+
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext not in VIDEO_EXTS:
+        raise HTTPException(400, f"허용되지 않는 확장자입니다: {ext}")
+
+    # 변환본 최종 파일명: 항상 .mp4 (확장자 통일)
+    base_name = os.path.splitext(safe_name)[0]
+    final_filename = base_name + ".mp4"
+    existing = db.query(DemoVideo).filter(DemoVideo.filename == final_filename).first()
+    if existing:
+        raise HTTPException(409, "동일한 영상 파일명이 이미 존재합니다.")
+
+    os.makedirs(VIDEO_DIR, exist_ok=True)
+    # 업로드 임시 저장 (변환 전 원본)
+    tmp_path = os.path.abspath(os.path.join(VIDEO_DIR, "_uploading_" + safe_name))
+    final_path = os.path.abspath(os.path.join(VIDEO_DIR, final_filename))
+
+    with open(tmp_path, "wb+") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    job = job_manager.create("video_normalize", final_filename)
+
+    def do_convert(job: Job):
+        bg_db = SessionLocal()
+        try:
+            def report(p: int, msg: str):
+                job_manager.update(job.id, progress=p, message=msg)
+
+            report(10, "업로드 완료, ffmpeg 정규화 시작")
+            _ffmpeg_normalize(tmp_path, final_path)
+            report(85, "변환 완료, 원본 정리")
+
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+            report(95, "DB 등록 중")
+            new_video = DemoVideo(filename=final_filename, filepath=final_path)
+            bg_db.add(new_video)
+            bg_db.commit()
+
+            job_manager.update(
+                job.id, status="completed", progress=100,
+                message="정규화 + 등록 완료",
+            )
+        except Exception as e:
+            logger.exception("영상 변환 실패: %s", e)
+            for p in (tmp_path, final_path):
+                if p and os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+            job_manager.update(job.id, status="failed", error=str(e))
+        finally:
+            bg_db.close()
+
+    job_manager.run_async(job, do_convert)
+    return {"job_id": job.id}
+
+
+@router.delete("/api/video/{vid}", dependencies=[Depends(require_token)])
+def del_video(vid: int, db: Session = Depends(get_db)):
+    v = db.query(DemoVideo).filter(DemoVideo.id == vid).first()
+    if not v:
+        raise HTTPException(404, "영상을 찾을 수 없습니다.")
+
+    # 현재 사용 중인 영상이면 video_filename NULL 처리 (engine.py 가드가 파이프라인 정지)
+    c = db.query(SystemConfig).first()
+    if c is not None and c.input_source == "video" and c.video_filename == v.filename:
+        c.video_filename = None
+        db.commit()
+        state.update_config("video_filename", None)
+        logger.info("활성 영상 삭제 — video_filename 자동 해제")
+
+    if v.filepath and os.path.exists(v.filepath):
+        try:
+            os.remove(v.filepath)
+        except Exception as e:
+            logger.warning("영상 파일 삭제 실패: %s", e)
+
+    db.delete(v)
+    db.commit()
     return {"status": "ok"}
 
 

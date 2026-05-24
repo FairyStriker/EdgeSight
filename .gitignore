@@ -7,13 +7,13 @@ venv/
 *.db
 *.sqlite
 
-# Node / Vite
+# Node / Vite / TypeScript
 node_modules/
 dist/
 .vite/
 *.tsbuildinfo
-frontend/vite.config.js
 frontend/vite.config.d.ts
+frontend/vite.config.js
 
 # 환경변수
 .env
@@ -29,12 +29,19 @@ frontend/vite.config.d.ts
 .DS_Store
 Thumbs.db
 
-# 런타임 산출물
+# 사용자 업로드 / 런타임 산출물 (배포 대상 아님)
 backend/configs/config_infer_*.txt
 backend/configs/labels_*.txt
 backend/models/*.engine
 backend/models/*.onnx
 backend/models/*.pt
+backend/videos/*.mp4
+backend/videos/*.mkv
+backend/videos/*.avi
+backend/videos/*.mov
+backend/videos/*.webm
+backend/videos/*.flv
+backend/videos/*.m4v
 
 # 로그
 *.log

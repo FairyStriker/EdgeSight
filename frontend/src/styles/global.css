@@ -248,6 +248,17 @@ tr:nth-child(even) { background-color: #f9f9f9; }
 }
 .btn-primary { background: var(--accent); }
 .btn-success { background: var(--success); }
+.btn-danger { background: #d9534f; }
+.btn-danger:hover { background: #c9302c; }
+
+/* 목록 내 인라인 버튼 (영상/모델 삭제 등) — 작고 가로 자동 폭 */
+.btn-action.btn-inline {
+  width: auto;
+  padding: 4px 10px;
+  margin-top: 0;
+  font-size: 0.8rem;
+  border-radius: 4px;
+}
 
 .model-list-container {
   list-style: none;

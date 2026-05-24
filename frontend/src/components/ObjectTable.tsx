@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import type { DetectedObject, Lang } from "../api/types";
 import { t } from "../i18n";
 
@@ -7,8 +8,25 @@ interface Props {
 }
 
 export function ObjectTable({ lang, objects }: Props) {
+  // 매 WebSocket 갱신 시 row 재구성으로 scrollTop이 0으로 튕기는 문제 해결.
+  // 사용자가 스크롤한 위치를 ref에 저장 → 매 렌더 직후 복원.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const savedScrollTop = useRef(0);
+
+  useLayoutEffect(() => {
+    if (wrapperRef.current) {
+      wrapperRef.current.scrollTop = savedScrollTop.current;
+    }
+  });
+
+  const onScroll = () => {
+    if (wrapperRef.current) {
+      savedScrollTop.current = wrapperRef.current.scrollTop;
+    }
+  };
+
   return (
-    <div className="table-wrapper">
+    <div ref={wrapperRef} className="table-wrapper" onScroll={onScroll}>
       <table>
         <thead>
           <tr>
