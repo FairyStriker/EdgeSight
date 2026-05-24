@@ -1,0 +1,21 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+sqlalchemy>=2.0
+python-multipart>=0.0.9
+# Jetson 환경(시스템 패키지로 제공)
+#   - PyGObject (gi)
+#   - pyds (DeepStream Python bindings)
+# 위 두 항목은 apt / DeepStream SDK 설치본을 사용하므로 pip 의존성에서 제외
+
+# --- 선택적: YOLOv8 .pt 업로드 자동 변환 기능에만 필요 ---
+# Jetson에서는 NVIDIA 제공 PyTorch wheel을 먼저 설치한 뒤 아래 패키지 설치:
+#   pip install ultralytics onnx onnxsim
+# - ultralytics : .pt 모델 로드 및 nn 모듈 접근
+# - onnx        : 모델 단순화 단계
+# - onnxsim     : 단순화 (없어도 동작하지만 엔진 빌드가 느려질 수 있음)
+#
+# TensorRT 엔진 빌드는 Jetson 표준 trtexec(`/usr/src/tensorrt/bin/trtexec`)을 사용하므로
+# 별도 pip 의존성 없음. 경로가 다르면 EDGESIGHT_TRTEXEC 환경변수로 지정.
+#
+# 기본 자체 export 대신 marcoslucianops/DeepStream-Yolo 의 export_yoloV8.py 를 쓰려면
+# EDGESIGHT_PT_EXPORT_SCRIPT=/path/to/export_yoloV8.py 환경변수 설정.

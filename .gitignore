@@ -1,23 +1,25 @@
 # Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/.venv/
+**/venv/
 *.db
 *.sqlite
 
-# Node / Vite / TypeScript
-node_modules/
-dist/
-.vite/
+# Node / Vite
+**/node_modules/
+**/dist/
+**/.vite/
 *.tsbuildinfo
-frontend/vite.config.d.ts
-frontend/vite.config.js
+**/vite.config.js
+**/vite.config.d.ts
 
 # 환경변수
 .env
 .env.local
+**/.env
+**/.env.local
 
 # IDE / 도구
 .idea/
@@ -29,19 +31,16 @@ frontend/vite.config.js
 .DS_Store
 Thumbs.db
 
-# 사용자 업로드 / 런타임 산출물 (배포 대상 아님)
-backend/configs/config_infer_*.txt
-backend/configs/labels_*.txt
-backend/models/*.engine
-backend/models/*.onnx
-backend/models/*.pt
-backend/videos/*.mp4
-backend/videos/*.mkv
-backend/videos/*.avi
-backend/videos/*.mov
-backend/videos/*.webm
-backend/videos/*.flv
-backend/videos/*.m4v
+# 런타임 산출물 (nano/, agx/ 양쪽 모두)
+**/backend/configs/config_infer_*.txt
+**/backend/configs/labels_*.txt
+**/backend/models/*.engine
+**/backend/models/*.onnx
+**/backend/models/*.pt
+**/backend/videos/*
+!**/backend/videos/.gitkeep
+!**/backend/models/.gitkeep
+!**/backend/configs/.gitkeep
 
 # 로그
 *.log
