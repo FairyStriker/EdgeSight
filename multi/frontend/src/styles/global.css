@@ -1,0 +1,546 @@
+:root {
+  --primary: #2c3e50;
+  --accent: #3498db;
+  --bg: #f4f6f9;
+  --text: #333;
+  --table-head: #ecf0f1;
+  --danger: #e74c3c;
+  --success: #27ae60;
+  --dark-panel: #34495e;
+  --orange: #f39c12;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header.app-header {
+  background: white;
+  padding: 0 25px;
+  height: 60px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-badge {
+  background: #e74c3c;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  animation: pulse 2s infinite;
+}
+
+.channel-count-badge {
+  background: var(--accent);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-family: monospace;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.mock-banner {
+  background: linear-gradient(90deg, #ff9500, #e74c3c);
+  color: white;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  padding: 5px;
+  flex-shrink: 0;
+}
+
+.btn-header {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+.btn-header:hover { background: #34495e; }
+
+.container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  padding: 16px;
+  min-height: 0;
+}
+
+/* ----- 채널 그리드 ----- */
+.channel-grid {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.grid-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1d24;
+  color: #aaa;
+  border-radius: 10px;
+  font-style: italic;
+}
+
+/* ----- 채널 타일 ----- */
+.channel-tile {
+  position: relative;
+  background: #0c1018;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.channel-tile:hover {
+  border-color: rgba(52, 152, 219, 0.5);
+}
+.channel-tile.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.channel-tile.disabled {
+  opacity: 0.5;
+}
+
+.channel-tile-video {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.channel-tile-video img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.channel-tile-off {
+  color: #888;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+}
+
+.channel-tile-overlay-top,
+.channel-tile-overlay-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+.channel-tile-overlay-top {
+  top: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent);
+}
+.channel-tile-overlay-bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.65), transparent);
+  font-family: monospace;
+}
+
+.channel-tile-name {
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.channel-tile-src {
+  font-size: 0.65rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.6);
+}
+.channel-tile-src.src-rtsp { background: #c0392b; }
+.channel-tile-src.src-usb { background: #27ae60; }
+.channel-tile-src.src-video { background: #8e44ad; }
+
+.channel-tile-stats {
+  display: flex;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.data-panel {
+  background: white;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  min-height: 0;
+}
+.panel-header {
+  font-weight: bold;
+  color: var(--accent);
+  border-bottom: 2px solid #eee;
+  padding-bottom: 8px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.panel-sub {
+  color: #666;
+  font-size: 0.8rem;
+  font-weight: normal;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.info-box {
+  background: var(--dark-panel);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+}
+.info-label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-bottom: 5px;
+  letter-spacing: 0.5px;
+}
+.info-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-family: monospace;
+}
+.count-box {
+  background: var(--orange);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  grid-column: span 2;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+th {
+  background: var(--table-head);
+  padding: 10px;
+  text-align: left;
+  position: sticky;
+  top: 0;
+  color: #555;
+}
+td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+tr:nth-child(even) { background-color: #f9f9f9; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-content {
+  background: white;
+  width: 550px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.modal-header {
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+}
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #888;
+}
+
+.form-label {
+  display: block;
+  font-weight: bold;
+  font-size: 0.9rem;
+  margin: 10px 0 5px;
+  color: #555;
+}
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font: inherit;
+}
+.form-select { background: white; }
+.form-help { font-size: 0.75rem; color: #888; margin-top: 4px; }
+
+.btn-action {
+  width: 100%;
+  padding: 12px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  color: white;
+}
+.btn-primary { background: var(--accent); }
+.btn-success { background: var(--success); }
+.btn-danger { background: #d9534f; }
+.btn-danger:hover { background: #c9302c; }
+
+/* 목록 내 인라인 버튼 (영상/모델 삭제 등) — 작고 가로 자동 폭 */
+.btn-action.btn-inline {
+  width: auto;
+  padding: 4px 10px;
+  margin-top: 0;
+  font-size: 0.8rem;
+  border-radius: 4px;
+}
+
+.model-list-container {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+.model-item {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.model-item.active {
+  background: #e8f4fd;
+  border-left: 4px solid var(--accent);
+}
+.btn-mini {
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-left: 5px;
+}
+.btn-mini.del {
+  color: var(--danger);
+  border-color: #fadbd8;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.upload-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  background: #f8f9fa;
+  border: 1px solid #eee;
+  border-bottom: none;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #666;
+}
+.tab-btn.active {
+  background: white;
+  color: var(--accent);
+  border-color: #ddd;
+  border-bottom: 2px solid white;
+  margin-bottom: -1px;
+}
+
+.job-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.job-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+}
+.job-item:last-child { border-bottom: none; }
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+.job-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.job-progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* ----- 채널 모달 ----- */
+.channel-summary {
+  background: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.channel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  gap: 10px;
+}
+.channel-row:last-child { border-bottom: none; }
+
+.channel-row-info { flex: 1; min-width: 0; }
+.channel-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.channel-row-sub {
+  font-size: 0.78rem;
+  color: #888;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.channel-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.badge-disabled {
+  font-size: 0.65rem;
+  background: #999;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.4px;
+  font-weight: bold;
+}
